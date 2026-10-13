@@ -1,0 +1,42 @@
+
+name: CI Workflow
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - name: Actualizar README.md
+        run: |
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          echo "Añadida feature: $BRANCH_NAME" >> README.md
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: añadir linea de feature al README" || echo "Sin cambios que commitear"
+          git push
+
+  validate-dev:
+    runs-on: self-hosted
+    needs: update-readme
+    steps:
+      - name: Validar DEV_TOKEN
+        run: |
+          if [ "$LOCAL_DEV_TOKEN" = "${{ secrets.DEV_TOKEN }}" ]; then
+            echo "Token de desarrollo validado correctamente."
+          else
+            echo "Error: LOCAL_DEV_TOKEN no coincide con DEV_TOKEN."
+            exit 1
+          fi
