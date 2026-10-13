@@ -1,0 +1,45 @@
+name: CD Workflow
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Incrementar versión en README.md
+        run: |
+          NOW=$(date +"%Y-%m-%d %H:%M:%S")
+          if grep -q "AppVersion-" README.md; then
+            CURRENT_VER=$(grep -o -E 'AppVersion-[0-9]+' README.md | tail -n1 | cut -d'-' -f2)
+            NEXT_VER=$((CURRENT_VER + 1))
+            sed -i "s/AppVersion-$CURRENT_VER/AppVersion-$NEXT_VER ($NOW)/g" README.md
+          else
+            echo "AppVersion-1 ($NOW)" >> README.md
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: incrementar version a AppVersion-$NEXT_VER" || echo "Sin cambios que commitear"
+          git push
+
+  validate-prod:
+    runs-on: self-hosted
+    needs: update-version
+    steps:
+      - name: Validar PROD_TOKEN
+        run: |
+          if [ "$LOCAL_PROD_TOKEN" = "${{ secrets.PROD_TOKEN }}" ]; then
+            echo "Token de producción validado correctamente."
+          else
+            echo "Error: LOCAL_PROD_TOKEN no coincide con PROD_TOKEN."
+            exit 1
+          fi
